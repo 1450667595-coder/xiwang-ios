@@ -3,7 +3,12 @@ import Security
 
 enum ServiceError: LocalizedError {
     case status(Int,String); case invalidResponse
-    var errorDescription:String? { switch self { case .status(let code,let text): return code == 409 ? "云端已有更新。请刷新后重新确认，未保存的内容仍保留。" : "请求失败（\(code)）：\(text.prefix(160))"; case .invalidResponse: return "服务器返回了无法识别的内容，请稍后重试。" } }
+    var errorDescription:String? { switch self { case .status(let code,_):
+        if code == 409 { return "云端已有更新。请到设置的同步详情中确认，本机修改仍保留。" }
+        if [502,503,504].contains(code) { return "云服务正在启动，请稍后重试。记录仍保存在本机。" }
+        if code == 429 { return "操作较频繁，请稍后再试。" }
+        return "请求暂未完成（\(code)），请稍后重试或查看同步详情。"
+        case .invalidResponse: return "服务器返回了无法识别的内容，请稍后重试。" } }
 }
 enum Identity {
     static let service = "cn.xiwang.personal.native"

@@ -18,4 +18,10 @@ final class NavigationTests:XCTestCase {
         app.tabBars.buttons["记录"].tap(); XCTAssertTrue(app.staticTexts["还没有记录"].exists)
     }
     func testHomeScrollResponsiveness() { measure(metrics:[XCTOSSignpostMetric.scrollDecelerationMetric]) { app.scrollViews.firstMatch.swipeUp(); app.scrollViews.firstMatch.swipeDown() } }
+    func testDesktopEnglishNameAndSystemIconMask() {
+        XCUIDevice.shared.press(.home)
+        let desktop = XCUIApplication(bundleIdentifier:"com.apple.springboard")
+        XCTAssertTrue(desktop.icons["KneeHope"].waitForExistence(timeout:5))
+        let icon = XCTAttachment(screenshot:desktop.screenshot()); icon.name = "KneeHope-Desktop-Icon"; icon.lifetime = .keepAlways; add(icon)
+    }
 }

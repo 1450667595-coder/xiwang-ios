@@ -45,6 +45,13 @@ import Observation
         } catch { self.error = error.localizedDescription }
     }
     private func flushDisk() async { await withCheckedContinuation { continuation in diskQueue.async { continuation.resume() } } }
+    private func persistDurably() async throws {
+        if fixture { return }; let saved = state; let destination = file
+        try await withCheckedThrowingContinuation { (continuation:CheckedContinuation<Void,Error>) in diskQueue.async {
+            do { try FileManager.default.createDirectory(at:destination.deletingLastPathComponent(),withIntermediateDirectories:true); try JSONEncoder().encode(saved).write(to:destination,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication]); continuation.resume() }
+            catch { continuation.resume(throwing:error) }
+        } }
+    }
     private func alreadyApplied(_ pending:Pending) async -> Bool {
         guard let payload = try? JSONSerialization.jsonObject(with:pending.body) as? [String:Any] else { return false }
         do {
@@ -73,14 +80,16 @@ import Observation
             let body = try JSONEncoder().encode(payload)
             if fixture { if path == "/api/care", let c = try? JSONDecoder().decode(Care.self,from:body) { state.snapshot?.care.append(c) }; return true }
             // Persist before contacting the server. Session UUIDs make retries idempotent.
-            let p = Pending(path:path,body:body); state.pending.append(p); persist(); await flushDisk(); await sync()
-            return !state.pending.contains(where:{$0.id == p.id})
+            let p = Pending(path:path,body:body); state.pending.append(p); try await persistDurably(); await sync()
+            // The durable outbox owns the submission even when offline. Closing
+            // its form prevents another tap from creating a duplicate care UUID.
+            return true
         } catch { self.error = error.localizedDescription; return false }
     }
-    func start() { if state.training == nil { state.training = Training(steps:Step.make(snapshot.choices)) }; state.training?.resume(); persist() }
-    func pause() { state.training?.pause(); persist() }
-    func completeSet() { state.training?.completeSet(); persist() }
-    func skip() { state.training?.skip(); persist() }
+    func start() { if state.training == nil { state.training = Training(steps:Step.make(snapshot.choices)) }; state.training?.resume(); UIApplication.shared.isIdleTimerDisabled = state.training?.started != nil; persist() }
+    func pause() { state.training?.pause(); UIApplication.shared.isIdleTimerDisabled = false; persist() }
+    func completeSet() { state.training?.completeSet(); UIApplication.shared.isIdleTimerDisabled = state.training?.started != nil; persist() }
+    func skip() { state.training?.skip(); UIApplication.shared.isIdleTimerDisabled = state.training?.started != nil; persist() }
     func finish(pain:Int?,notes:String) async -> Bool {
         guard var t = state.training else { return false }; t.pause(); state.training = t; persist()
         let payload = SessionPayload(id:t.id,date:t.date,seconds:t.seconds,steps:t.steps,planNote:snapshot.plan,pain:pain,swelling:false,feeling:"",notes:notes)
@@ -88,12 +97,12 @@ import Observation
         // A queued session is durable even offline; do not create a second ID for it.
         if saved || state.pending.contains(where:{ (try? JSONDecoder().decode(SessionPayload.self,from:$0.body).id) == t.id }) { state.training = nil; persist(); return true }; return false
     }
-    func connect(_ code:String) async {
+    func connect(_ code:String) async -> Bool {
         let value = code.trimmingCharacters(in:.whitespacesAndNewlines).replacingOccurrences(of:"XW1-",with:"")
-        guard UUID(uuidString:value) != nil else { error = "请输入完整的 XW1- 同步码。"; return }
-        guard !syncing else { error = "正在同步，请稍后再连接其他设备记录。"; return }
-        guard state.pending.isEmpty, state.training == nil else { error = "请先保存当前训练并同步待上传记录，再切换设备身份。"; return }
-        do { try Identity.write(value); identity = value; await service.switchIdentity(value); state = DiskState(); if let d = try? Data(contentsOf:file), let s = try? JSONDecoder().decode(DiskState.self,from:d) { state = s }; await sync() } catch { self.error = error.localizedDescription }
+        guard UUID(uuidString:value) != nil else { error = "请输入完整的 XW1- 同步码。"; return false }
+        guard !syncing else { error = "正在同步，请稍后再连接其他设备记录。"; return false }
+        guard state.pending.isEmpty, state.training == nil else { error = "请先保存当前训练并同步待上传记录，再切换设备身份。"; return false }
+        do { try Identity.write(value); identity = value; await service.switchIdentity(value); state = DiskState(); if let d = try? Data(contentsOf:file), let s = try? JSONDecoder().decode(DiskState.self,from:d) { state = s }; await sync(); return true } catch { self.error = error.localizedDescription; return false }
     }
     func chat(_ text:String) async {
         guard !chatBusy, !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }

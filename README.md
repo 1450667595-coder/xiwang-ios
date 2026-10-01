@@ -1,32 +1,23 @@
-# 膝望 · iOS 自用版
+# KneeHope native iOS app
 
-独立 iOS 容器，连接现有膝望 HTTPS 网站和腾讯云数据。无需 App Store，上线网页更新后 App 下次打开即可使用。
+The application target contains SwiftUI sources under Native and its asset catalog. It does not compile the old UIKit/WebKit browser container. Minimum OS and build SDK: iOS 27. Desktop display name: KneeHope. Bundle identity is unchanged so a signed update can replace the previous installation.
 
-仓库只有容器源码、品牌图标和构建脚本，不包含健康数据、同步码、云端密钥或网页后端源码。最低 iOS 16，iPhone 竖屏。使用系统 WKWebView 和持久化网站存储，支持照片选择、JSON/HTML 文件导出的系统分享窗口及网络失败重试。
+## Apple references used
 
-## 下载和安装
+- https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass
+- https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views
+- https://developer.apple.com/design/human-interface-guidelines/app-icons
+- https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-27-release-notes
+- https://developer.apple.com/xcode/system-requirements/
 
-1. GitHub → Actions → **Build XiWang iOS IPA** → 最近一次绿色构建 → Artifacts → **XiWang-Sideloadly**。
-2. 下载并解压，取得 **XiWang-unsigned.ipa**。它是未签名安装包，不是可以在手机上直接点开安装的文件。
-3. Windows 下载官方 [Sideloadly](https://sideloadly.io/)，按官方说明准备 Apple 设备驱动。连接 iPhone，解锁并在手机上信任电脑。
-4. Sideloadly 中选择 iPhone，把 IPA 拖进去，使用自己的 Apple 账号，点击 Start。密码和验证码只在你自己的安装工具中输入，不放进 GitHub、聊天或项目。
-5. 如系统提示，按 iPhone 指引在设置中信任相应开发者，并开启开发者模式。安装后的桌面图标名称是“膝望”。
-6. 免费 Apple 账号签名通常 7 天有效，提前续签。Sideloadly 可以配置自动刷新，但电脑、连接条件及账号验证仍需满足；不要删除 App 再续签。每次使用相同账号和 Bundle ID 覆盖安装。
+Use system TabView, NavigationStack, toolbars, sheets, glass button styles, PhotosPicker, dynamic text and SF Symbols. The system supplies navigation material and edge-swipe transitions; content panels use material instead of glass stacked throughout the page. System accessibility settings affect the native controls. Icon artwork is opaque and square; the OS applies the rounded mask.
 
-## 首次连接原来的记录
+## Cloud integration
 
-在原来的 Safari 膝望中打开“设备同步”，查看私人同步码。在 iOS App 的“设备同步”中粘贴同一码，再连接。App 与 Safari 的本机存储独立，首次匿名登录会创建新空间，不会自动识别原账号。连接后训练、护理、记录及已保存的背景和透明度使用同一份云端数据。同步码等同登录凭证，不要公开。
+Native URLSession calls the existing authenticated business endpoints, not browser SDK or database administrator APIs. A device UUID is kept in Keychain. Connect the existing private XW1 sync code in Settings to access the web account. No API secrets or health data are included in this repository. Writes are queued in a protected, atomic local file before requests. Sessions retain stable UUIDs for idempotent retries. Revision conflicts must be shown rather than overwritten automatically. Wallpaper and appearance use the same cloud account as records.
 
-## 构建
+## Verification
 
-GitHub Actions 使用标准 macOS runner。公开仓库按 GitHub 当前规则可免费运行。没有 Apple 签名密钥、证书或开发者账号构建秘密；签名在个人电脑的 Sideloadly 中进行。
+GitHub Actions uses the standard xcode-27 runner to compile an unsigned device IPA, run unit and UI tests on the iOS 27 simulator and capture screenshots. The package must be signed by Sideloadly before installation. Simulator success cannot establish actual device frame-rate, battery behavior, photo permissions or Apple signing success; these need an on-device acceptance pass. Do not advertise a zero-bug guarantee.
 
-有 Mac 时安装 Xcode 与 XcodeGen，在仓库执行 `bash scripts/build-ipa.sh`。生成 `artifacts/XiWang-unsigned.ipa`。编译与模拟器启动通过只能证明构建可运行，照片选择、真机安装、续签、导出分享和跨设备同步仍需在你的实际 iPhone 复核。
-
-## 说明
-
-- 这是加载线上服务的 App 容器；首次启动需要联网，不是完整离线原生重写。
-- 不申请通知、通讯录、定位、摄像头或后台常驻权限。图片选择由系统文件/照片选择器处理。
-- 文件导出不超过 10 MB，系统分享窗口可保存到“文件”；临时导出文件分享结束后清理。
-- 网页会话、壁纸缓存与离线队列保存在 App 沙盒。卸载会清除本机草稿，云端已同步记录仍在。
-- 私有存储与身份验证仍由现有膝望服务执行；容器没有绕过登录或开放云数据库。
+Artwork edit prompt: preserve both bears, bandages and pawprint trail; remove inset tile and outer margin; opaque full-bleed cream square; keep ears/feet visible; no text or pre-rounded corners. Built-in image generation was used for the asset edit, followed by deterministic SDK asset resizing.

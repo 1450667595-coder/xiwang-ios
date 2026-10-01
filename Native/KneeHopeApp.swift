@@ -94,8 +94,8 @@ struct FinishView:View {
 }
 struct PlanView:View {
     @Environment(Store.self) private var store; @Environment(\.dismiss) private var dismiss
-    @State private var choices = Choice.defaults; @State private var note = ""; @State private var saving = false
-    var body:some View { Form { Section { Text("请按医生确认的计划调整，不以次数或时长越多越好。").foregroundStyle(.secondary); TextField("计划说明",text:$note,axis:.vertical) }; ForEach($choices) { $c in Section(Exercise.name(c.id)) { Toggle("启用",isOn:$c.enabled); Stepper("\(c.sets) 组",value:$c.sets,in:1...10); Stepper("每组 \(c.reps) 次",value:$c.reps,in:1...60); Stepper("保持 \(c.hold) 秒",value:$c.hold,in:1...120) } } }.navigationTitle("训练计划").onAppear { choices = store.snapshot.choices; note = store.snapshot.plan }.toolbar { Button("取消") { dismiss() }; Button("保存") { saving = true; Task { struct Payload:Encodable { var type = "plan"; var content:String; var choices:[Choice]; var revision:Int }; if await store.send(Payload(content:String(note.prefix(5000)),choices:choices,revision:store.snapshot.planRevision),path:"/api/records") { dismiss() }; saving = false } }.disabled(saving || !choices.contains(where:\.enabled) || store.state.training != nil) } }
+    @State private var choices = Choice.defaults; @State private var note = ""; @State private var saving = false; @State private var revision = 0
+    var body:some View { Form { Section { Text("请按医生确认的计划调整，不以次数或时长越多越好。").foregroundStyle(.secondary); TextField("计划说明",text:$note,axis:.vertical) }; ForEach($choices) { $c in Section(Exercise.name(c.id)) { Toggle("启用",isOn:$c.enabled); Stepper("\(c.sets) 组",value:$c.sets,in:1...10); Stepper("每组 \(c.reps) 次",value:$c.reps,in:1...60); Stepper("保持 \(c.hold) 秒",value:$c.hold,in:1...120) } } }.navigationTitle("训练计划").onAppear { choices = store.snapshot.choices; note = store.snapshot.plan; revision = store.snapshot.planRevision }.toolbar { Button("取消") { dismiss() }; Button("保存") { saving = true; Task { struct Payload:Encodable { var type = "plan"; var content:String; var choices:[Choice]; var revision:Int }; if await store.send(Payload(content:String(note.prefix(5000)),choices:choices,revision:revision),path:"/api/records") { dismiss() }; saving = false } }.disabled(saving || !choices.contains(where:\.enabled) || store.state.training != nil) } }
 }
 struct CareView:View {
     @Environment(Store.self) private var store; @State private var adding = false
@@ -124,22 +124,23 @@ struct ChatView:View {
 struct SettingsView:View {
     @Environment(Store.self) private var store
     @State private var code = ""; @State private var prefs = Preferences(); @State private var photo:PhotosPickerItem?; @State private var saving = false
+    @State private var draft = Appearance(prefs:Preferences(),revision:0)
     var body:some View { Form {
-        Section("跨设备同步") { Text("网页版和其他设备使用同一同步码，才能访问同一份记录与壁纸。匿名身份不会自动跨设备合并。").font(.footnote); ShareLink(item:"XW1-" + store.identity) { Label("保存本机同步码",systemImage:"key") }; SecureField("粘贴已有 XW1- 同步码",text:$code).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("连接已有记录") { Task { await store.connect(code); code = "" } }; Button("立即同步") { Task { await store.sync() } }; NavigationLink("待上传：\(store.state.pending.count) 条") { PendingView() } }
+        Section("跨设备同步") { Text("网页版和其他设备使用同一同步码，才能访问同一份记录与壁纸。匿名身份不会自动跨设备合并。").font(.footnote); ShareLink(item:"XW1-" + store.identity) { Label("保存本机同步码",systemImage:"key") }; SecureField("粘贴已有 XW1- 同步码",text:$code).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("连接已有记录") { Task { if await store.connect(code) { code = ""; draft = store.appearance; prefs = draft.prefs } } }; Button("立即同步") { Task { await store.sync() } }; NavigationLink("待上传：\(store.state.pending.count) 条") { PendingView() } }
         Section("个性化背景") { Picker("配色",selection:$prefs.preset) { Text("冰蓝").tag("ice"); Text("银白").tag("silver"); Text("暮色").tag("dusk") }; PhotosPicker(selection:$photo,matching:.images) { Label("选择背景图片",systemImage:"photo") }; Toggle("使用背景图片",isOn:$prefs.photo); Text("背景暗度：\(prefs.dim)%"); Slider(value:Binding(get:{Double(prefs.dim)},set:{prefs.dim = Int($0)}),in:0...60); Text("内容面板透明参数：\(prefs.glass)%"); Slider(value:Binding(get:{Double(prefs.glass)},set:{prefs.glass = Int($0)}),in:25...90); Button(saving ? "保存中…" : "保存并同步外观") { Task { await saveAppearance() } }.disabled(saving) }
         Section("关于") { LabeledContent("App",value:"KneeHope 2.0"); Text("SwiftUI 原生界面 · iOS 27\n系统导航与 Liquid Glass 控件\n启用系统“减少动态效果”或“降低透明度”后会自动适配。").font(.footnote).foregroundStyle(.secondary) }
-    }.navigationTitle("设置").onAppear { prefs = store.appearance.prefs }.onChange(of:photo) { _,item in Task { await loadPhoto(item) } } }
-    func saveAppearance() async { saving = true; defer { saving = false }; var ap = store.appearance; ap.prefs = prefs; if !prefs.photo { ap.photoId = nil; ap.photoData = nil }; _ = await store.send(ap,path:"/api/appearance") }
+    }.navigationTitle("设置").onAppear { prefs = store.appearance.prefs; draft = store.appearance }.onChange(of:photo) { _,item in Task { await loadPhoto(item) } } }
+    func saveAppearance() async { saving = true; defer { saving = false }; var ap = draft; ap.prefs = prefs; if !prefs.photo { ap.photoId = nil; ap.photoData = nil }; if await store.send(ap,path:"/api/appearance"), !store.state.pending.contains(where:{$0.path == "/api/appearance"}) { draft = store.appearance; prefs = draft.prefs } }
     func loadPhoto(_ item:PhotosPickerItem?) async {
         guard let item else { return }; saving = true; defer { saving = false }
         do { guard let data = try await item.loadTransferable(type:Data.self) else { return }
             let jpeg = await Task.detached(priority:.userInitiated) { () -> Data? in
                 guard let source = CGImageSourceCreateWithData(data as CFData,nil), let image = CGImageSourceCreateThumbnailAtIndex(source,0,[kCGImageSourceCreateThumbnailFromImageAlways:true,kCGImageSourceThumbnailMaxPixelSize:1600,kCGImageSourceCreateThumbnailWithTransform:true] as CFDictionary) else { return nil }
                 let ui = UIImage(cgImage:image); var quality = 0.8; var result = ui.jpegData(compressionQuality:quality)
-                while (result?.count ?? 0) > 1_500_000 && quality > 0.15 { quality -= 0.1; result = ui.jpegData(compressionQuality:quality) }; return result
+                while (result?.count ?? 0) > 1_450_000 && quality > 0.15 { quality -= 0.1; result = ui.jpegData(compressionQuality:quality) }; return result
             }.value
-            guard let jpeg, jpeg.count <= 1_500_000 else { store.error = "图片太大，请选择较小的图片。"; return }
-            var ap = store.appearance; ap.photoId = UUID().uuidString; ap.photoData = "data:image/jpeg;base64," + jpeg.base64EncodedString(); ap.prefs.photo = true; store.state.appearance = ap; store.wallpaperImage = UIImage(data:jpeg); store.wallpaperID = ap.photoId; prefs = ap.prefs; store.persist()
+            guard let jpeg, jpeg.count <= 1_450_000 else { store.error = "图片太大，请选择较小的图片。"; return }
+            var ap = draft; ap.photoId = UUID().uuidString; ap.photoData = "data:image/jpeg;base64," + jpeg.base64EncodedString(); ap.prefs.photo = true; draft = ap; store.state.appearance = ap; store.wallpaperImage = UIImage(data:jpeg); store.wallpaperID = ap.photoId; prefs = ap.prefs; store.persist()
         } catch { store.error = error.localizedDescription }
     }
 }
