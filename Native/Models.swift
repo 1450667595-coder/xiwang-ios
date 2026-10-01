@@ -20,7 +20,7 @@ struct Entry: Codable, Identifiable {
     var date:String; var seconds:Int; var status:String; var pain:Int?; var swelling:Bool; var feeling:String; var notes:String; var revision:Int; var steps:[Step]
     var id:String { date }
 }
-struct Care: Codable, Identifiable {
+struct Care: Codable, Identifiable, Equatable {
     var id:String; var date:String; var kind:String; var time:String; var minutes:Int?; var notes:String; var revision:Int; var deleted:Bool
     var label:String { ["heat":"热敷","topical":"涂药","patch":"贴膏药"][kind] ?? kind }
 }

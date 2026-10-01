@@ -136,7 +136,7 @@ struct SettingsView:View {
                 while (result?.count ?? 0) > 1_500_000 && quality > 0.15 { quality -= 0.1; result = ui.jpegData(compressionQuality:quality) }; return result
             }.value
             guard let jpeg, jpeg.count <= 1_500_000 else { store.error = "图片太大，请选择较小的图片。"; return }
-            var ap = store.appearance; ap.photoId = UUID().uuidString; ap.photoData = "data:image/jpeg;base64," + jpeg.base64EncodedString(); ap.prefs.photo = true; store.state.appearance = ap; store.wallpaperImage = UIImage(data:jpeg); prefs = ap.prefs; store.persist()
+            var ap = store.appearance; ap.photoId = UUID().uuidString; ap.photoData = "data:image/jpeg;base64," + jpeg.base64EncodedString(); ap.prefs.photo = true; store.state.appearance = ap; store.wallpaperImage = UIImage(data:jpeg); store.wallpaperID = ap.photoId; prefs = ap.prefs; store.persist()
         } catch { store.error = error.localizedDescription }
     }
 }
