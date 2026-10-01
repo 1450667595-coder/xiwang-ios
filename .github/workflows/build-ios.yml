@@ -1,0 +1,43 @@
+name: Build XiWang iOS IPA
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: xiwang-ios-build
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify download bridge
+        run: node tests/downloads.mjs
+      - name: Prepare Xcode project
+        run: brew install xcodegen
+      - name: Build unsigned IPA for Sideloadly
+        run: bash scripts/build-ipa.sh
+      - name: Compile and launch on iPhone simulator
+        run: |
+          xcodebuild -project XiWang.xcodeproj -scheme XiWang -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/simulator CODE_SIGNING_ALLOWED=NO build
+          DEVICE=$(xcrun simctl list devices available --json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const d=Object.values(JSON.parse(s).devices).flat().find(d=>d.name.startsWith('iPhone'));if(!d)process.exit(1);console.log(d.udid)});")
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/simulator/Build/Products/Debug-iphonesimulator/XiWang.app
+          xcrun simctl launch "$DEVICE" cn.xiwang.personal
+          sleep 20
+          xcrun simctl io "$DEVICE" screenshot artifacts/iPhone-simulator.png
+      - name: Upload installation package and simulator screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: XiWang-Sideloadly
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
