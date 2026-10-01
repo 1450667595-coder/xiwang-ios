@@ -42,6 +42,7 @@ struct Card<Content:View>:View {
 struct TodayView:View {
     @Environment(Store.self) private var store
     @State private var ai = false
+    @State private var rest = false
     var body:some View { ScrollView { VStack(alignment:.leading,spacing:22) {
         Text(Date(),format:.dateTime.weekday(.wide).month().day()).font(.subheadline).foregroundStyle(.secondary)
         Text("今天，慢慢来。").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
@@ -50,11 +51,12 @@ struct TodayView:View {
             Label("每日康复训练",systemImage:"figure.flexibility").font(.title2.bold())
             Text("\(store.snapshot.choices.filter(\.enabled).count) 个项目 · 随时暂停或直接跳过").foregroundStyle(.secondary)
             NavigationLink { TrainingView() } label:{ Label(store.state.training == nil ? "开始训练" : "继续训练",systemImage:"play.fill").frame(maxWidth:.infinity).padding(8) }.buttonStyle(.glassProminent).accessibilityIdentifier("start-training")
+            Button("今天休息一下",systemImage:"moon") { rest = true }.buttonStyle(.glass)
         } }
         HStack(spacing:14) { metric("本周训练",value:"\(store.snapshot.records.filter { $0.status == "trained" && $0.date >= dayKey(Calendar.current.date(byAdding:.day,value:-6,to:Date())!) }.count) 天",symbol:"calendar"); metric("今日护理",value:"\(store.snapshot.care.filter{$0.date == dayKey() && !$0.deleted}.count) 次",symbol:"heart") }
         Card { VStack(alignment:.leading,spacing:12) { Label("照顾今天的你",systemImage:"sparkles").font(.headline); Text("先听听身体的感受。疼痛或不适时，可以暂停训练，记录下来并咨询医生。").foregroundStyle(.secondary); Button("问问健康助手",systemImage:"bubble.left.and.bubble.right") { ai = true }.buttonStyle(.glass) } }
         Text(store.busy ? "正在同步…" : store.state.pending.isEmpty ? "记录已保存在设备，联网后与云端同步" : "\(store.state.pending.count) 条记录等待同步").font(.caption).foregroundStyle(.secondary)
-    }.padding(24) }.background { Wallpaper() }.navigationTitle("KneeHope").navigationBarTitleDisplayMode(.inline).refreshable { await store.sync() }.sheet(isPresented:$ai) { NavigationStack { ChatView() } } }
+    }.padding(24) }.background { Wallpaper() }.navigationTitle("KneeHope").navigationBarTitleDisplayMode(.inline).refreshable { await store.sync() }.sheet(isPresented:$ai) { NavigationStack { ChatView() } }.sheet(isPresented:$rest) { NavigationStack { RecordDetail(entry:store.snapshot.records.first(where:{$0.date == dayKey()}) ?? Entry(date:dayKey(),seconds:0,status:"rest",pain:nil,swelling:false,feeling:"",notes:"",revision:0,steps:[])) } } }
     func metric(_ title:String,value:String,symbol:String) -> some View { Card { VStack(alignment:.leading,spacing:10) { Image(systemName:symbol).foregroundStyle(.indigo); Text(value).font(.title.bold()); Text(title).font(.caption).foregroundStyle(.secondary) } } }
 }
 struct TrainingView:View {
@@ -102,7 +104,8 @@ struct CareView:View {
 struct CareForm:View {
     @Environment(Store.self) private var store; @Environment(\.dismiss) private var dismiss
     var existing:Care?; @State private var kind = "heat"; @State private var date = Date(); @State private var minutes = 15; @State private var notes = ""; @State private var saving = false
-    var body:some View { Form { Picker("护理方式",selection:$kind) { Text("热敷").tag("heat"); Text("涂药").tag("topical"); Text("贴膏药").tag("patch") }; DatePicker("时间",selection:$date); Stepper("\(minutes) 分钟",value:$minutes,in:1...1440); TextField("备注",text:$notes,axis:.vertical).onChange(of:notes){_,v in notes = String(v.prefix(500))}; Text("护理方法、用药和时长遵循医生指导。").font(.footnote).foregroundStyle(.secondary) }.navigationTitle(existing == nil ? "记录护理" : "护理详情").onAppear { if let c = existing { kind = c.kind; minutes = c.minutes ?? 15; notes = c.notes; let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"; date = f.date(from:c.date + " " + c.time) ?? Date() } }.toolbar { Button("取消") { dismiss() }; Button("保存") { saving = true; Task { let f = DateFormatter(); f.dateFormat = "HH:mm"; let c = Care(id:existing?.id ?? UUID().uuidString,date:dayKey(date),kind:kind,time:f.string(from:date),minutes:minutes,notes:notes,revision:existing?.revision ?? 0,deleted:false); if await store.send(c,path:"/api/care") { dismiss() }; saving = false } }.disabled(saving).accessibilityIdentifier("save-care") } }
+    @State private var delete = false
+    var body:some View { Form { Picker("护理方式",selection:$kind) { Text("热敷").tag("heat"); Text("涂药").tag("topical"); Text("贴膏药").tag("patch") }; DatePicker("时间",selection:$date); Stepper("\(minutes) 分钟",value:$minutes,in:1...1440); TextField("备注",text:$notes,axis:.vertical).onChange(of:notes){_,v in notes = String(v.prefix(500))}; Text("护理方法、用药和时长遵循医生指导。").font(.footnote).foregroundStyle(.secondary); if existing != nil { Button("删除这条护理记录",role:.destructive) { delete = true }.disabled(saving) } }.navigationTitle(existing == nil ? "记录护理" : "护理详情").onAppear { if let c = existing { kind = c.kind; minutes = c.minutes ?? 15; notes = c.notes; let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"; date = f.date(from:c.date + " " + c.time) ?? Date() } }.toolbar { Button("取消") { dismiss() }; Button("保存") { saving = true; Task { let f = DateFormatter(); f.dateFormat = "HH:mm"; let c = Care(id:existing?.id ?? UUID().uuidString,date:dayKey(date),kind:kind,time:f.string(from:date),minutes:minutes,notes:notes,revision:existing?.revision ?? 0,deleted:false); if await store.send(c,path:"/api/care") { dismiss() }; saving = false } }.disabled(saving).accessibilityIdentifier("save-care") }.confirmationDialog("删除这条护理记录？",isPresented:$delete,titleVisibility:.visible) { Button("删除",role:.destructive) { guard var c = existing else { return }; c.deleted = true; saving = true; Task { if await store.send(c,path:"/api/care") { dismiss() }; saving = false } } } }
 }
 struct RecordsView:View {
     @Environment(Store.self) private var store
@@ -145,7 +148,7 @@ struct PendingView:View {
     @State private var replace = false; @State private var discard = false
     var body:some View { List {
         Text("遇到版本冲突时不会覆盖云端。请先查看修改内容，确认需要保留哪一份。").font(.footnote).foregroundStyle(.secondary)
-        if let first = store.state.pending.first { Section("第一条待上传修改") { Text(String(data:first.body,encoding:.utf8) ?? "").font(.caption.monospaced()).textSelection(.enabled); ShareLink(item:String(data:first.body,encoding:.utf8) ?? "") { Label("导出这条修改",systemImage:"square.and.arrow.up") }; Button("重新同步") { Task { await store.sync() } }; if first.path != "/api/records" || !(String(data:first.body,encoding:.utf8)?.contains("\"session\"") ?? false) { Button("确认保留本机修改") { replace = true } }; Button("丢弃这条待上传修改",role:.destructive) { discard = true } } }
+        if let first = store.state.pending.first { Section("第一条待上传修改") { Text(first.preview).font(.caption.monospaced()).textSelection(.enabled); ShareLink(item:String(data:first.body,encoding:.utf8) ?? "") { Label("导出这条修改",systemImage:"square.and.arrow.up") }; Button("重新同步") { Task { await store.sync() } }; if first.path != "/api/records" || !(String(data:first.body,encoding:.utf8)?.contains("\"session\"") ?? false) { Button("确认保留本机修改") { replace = true } }; Button("丢弃这条待上传修改",role:.destructive) { discard = true } } }
         else { ContentUnavailableView("没有待上传内容",systemImage:"checkmark.icloud") }
     }.navigationTitle("同步详情").confirmationDialog("以本机修改更新云端？",isPresented:$replace,titleVisibility:.visible) { Button("确认保留本机修改") { Task { await store.retryFirstWithLatestRevision() } } } message:{Text("会先读取云端最新版本，再提交你确认的本机内容。")}.confirmationDialog("丢弃这条本机修改？",isPresented:$discard,titleVisibility:.visible) { Button("丢弃",role:.destructive) { if !store.state.pending.isEmpty { store.state.pending.removeFirst(); store.persist(); Task { await store.sync() } } } } message:{Text("此操作不可撤销。你可以先导出备份。云端已有记录不会删除。") } }
 }

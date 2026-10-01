@@ -47,4 +47,7 @@ struct Training: Codable {
 }
 func dayKey(_ date:Date = Date()) -> String { let f = DateFormatter(); f.locale = Locale(identifier:"en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.string(from:date) }
 struct Pending: Codable, Identifiable { var id = UUID(); var path:String; var body:Data }
+extension Pending {
+    var preview:String { guard var json = try? JSONSerialization.jsonObject(with:body) as? [String:Any] else { return "待上传修改" }; if let photo = json["photoData"] as? String { json["photoData"] = "背景图片（\(photo.count) 字符，已隐藏预览）" }; guard let data = try? JSONSerialization.data(withJSONObject:json,options:[.prettyPrinted,.sortedKeys]) else { return "待上传修改" }; return String(data:data,encoding:.utf8) ?? "待上传修改" }
+}
 struct DiskState: Codable { var snapshot:Snapshot?; var appearance:Appearance?; var training:Training?; var pending:[Pending] = []; var messages:[ChatMessage] = [] }
