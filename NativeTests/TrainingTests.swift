@@ -1,0 +1,13 @@
+import XCTest
+@testable import XiWang
+
+final class TrainingTests:XCTestCase {
+    func testSkipIncludesBothSidesWithoutLosingCompletedSets() {
+        var t = Training(steps:Step.make(Choice.defaults)); t.steps[0].completed = 1; t.skip()
+        XCTAssertTrue(t.steps[0].skipped); XCTAssertTrue(t.steps[1].skipped); XCTAssertEqual(t.steps[0].completed,1); XCTAssertEqual(t.steps[t.index].id,"wall")
+    }
+    func testSetCountNeverExceedsPlan() { var t = Training(steps:[Step(key:"a",id:"ankle",side:"",sets:1,reps:20,hold:5,completed:0,skipped:false)]); t.completeSet(); t.completeSet(); XCTAssertEqual(t.steps[0].completed,1); XCTAssertNil(t.started) }
+    func testPauseStopsElapsedTimeAndHoldTimer() { var t = Training(steps:Step.make(Choice.defaults)); t.started = Date().addingTimeInterval(-10); t.deadline = Date().addingTimeInterval(5); t.pause(); XCTAssertEqual(t.seconds,10); XCTAssertNil(t.started); XCTAssertNil(t.deadline) }
+    func testDisabledProjectsNeverEnterSession() { var choices = Choice.defaults; choices[0].enabled = false; XCTAssertFalse(Step.make(choices).contains{$0.id == "straight"}) }
+    func testSessionPayloadRoundTripKeepsStableID() throws { let t = Training(steps:Step.make(Choice.defaults)); let p = SessionPayload(id:t.id,date:t.date,seconds:5,steps:t.steps,planNote:"",pain:nil,swelling:false,feeling:"",notes:""); let d = try JSONEncoder().encode(p); XCTAssertEqual(try JSONDecoder().decode(SessionPayload.self,from:d).id,t.id); let json = try XCTUnwrap(JSONSerialization.jsonObject(with:d) as? [String:Any]); XCTAssertNil(json["started"]); XCTAssertEqual(json["type"] as? String,"session") }
+}
