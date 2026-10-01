@@ -1,0 +1,10 @@
+build/
+artifacts/
+*.xcodeproj/
+DerivedData/
+.DS_Store
+*.p12
+*.mobileprovision
+*.cer
+*.pem
+.env*

@@ -1,0 +1,34 @@
+name: XiWang
+options:
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    SUPPORTS_MACCATALYST: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  XiWang:
+    type: application
+    platform: iOS
+    sources:
+      - path: XiWang
+        excludes: [downloads.js, Info.plist]
+      - path: XiWang/downloads.js
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cn.xiwang.personal
+        INFOPLIST_FILE: XiWang/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+schemes:
+  XiWang:
+    build:
+      targets:
+        XiWang: all
+    archive:
+      config: Release
