@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 command -v xcodebuild >/dev/null || { echo 'This build requires macOS and Xcode.'; exit 1; }
+node scripts/prepare-icons.mjs
 xcodegen generate
 plutil -lint XiWang/Info.plist
 xcodebuild -project XiWang.xcodeproj -scheme XiWang -configuration Release \
