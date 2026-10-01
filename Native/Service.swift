@@ -36,7 +36,9 @@ actor Service {
         r.httpMethod = body == nil ? "GET" : "POST"; r.httpBody = body
         r.setValue("application/json",forHTTPHeaderField:"Content-Type"); r.setValue("application/json",forHTTPHeaderField:"Accept")
         if authenticated, let token { r.setValue("Bearer \(token)",forHTTPHeaderField:"Authorization") }
-        let (data,response) = try await URLSession.shared.data(for:r)
+        var result:(Data,URLResponse)?
+        for attempt in 0..<3 { let current = try await URLSession.shared.data(for:r); result = current; if let http = current.1 as? HTTPURLResponse, [502,503,504].contains(http.statusCode), attempt < 2 { try await Task.sleep(for:.seconds(attempt == 0 ? 2 : 4)); continue }; break }
+        guard let (data,response) = result else { throw ServiceError.invalidResponse }
         guard let http = response as? HTTPURLResponse else { throw ServiceError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else { throw ServiceError.status(http.statusCode,String(data:data,encoding:.utf8) ?? "") }
         return data

@@ -27,8 +27,9 @@ struct RootView:View {
 }
 struct Wallpaper:View {
     @Environment(Store.self) private var store
+    @Environment(\.colorScheme) private var scheme
     var body:some View { ZStack {
-        LinearGradient(colors:store.appearance.prefs.preset == "dusk" ? [Color(red:0.95,green:0.83,blue:0.85),Color(red:0.80,green:0.81,blue:0.94)] : [Color(red:0.88,green:0.94,blue:0.98),Color(red:0.94,green:0.91,blue:0.98)],startPoint:.topLeading,endPoint:.bottomTrailing)
+        LinearGradient(colors:scheme == .dark ? [Color(red:0.12,green:0.15,blue:0.23),Color(red:0.19,green:0.15,blue:0.25)] : store.appearance.prefs.preset == "dusk" ? [Color(red:0.95,green:0.83,blue:0.85),Color(red:0.80,green:0.81,blue:0.94)] : [Color(red:0.88,green:0.94,blue:0.98),Color(red:0.94,green:0.91,blue:0.98)],startPoint:.topLeading,endPoint:.bottomTrailing)
         if store.appearance.prefs.photo, let image = store.wallpaperImage { Image(uiImage:image).resizable().scaledToFill(); Color.black.opacity(Double(store.appearance.prefs.dim)/100) }
     }.ignoresSafeArea().accessibilityHidden(true) }
 }
@@ -77,7 +78,7 @@ struct TrainingView:View {
                 }
                 HStack { Button(t.started == nil ? "继续" : "暂停",systemImage:t.started == nil ? "play" : "pause") { if t.started == nil { store.start() } else { store.pause() } }.buttonStyle(.glass); Spacer(); Button("结束并保存") { store.pause(); review = true }.buttonStyle(.glass) }
             } }
-            ForEach(Array(t.steps.enumerated()),id:\.offset) { i,s in HStack { Image(systemName:s.skipped ? "forward.end" : s.finished ? "checkmark.circle.fill" : "circle"); Text(Exercise.name(s.id) + " " + s.side); Spacer(); Text(s.skipped ? "已跳过" : "\(s.completed)/\(s.sets)").foregroundStyle(.secondary) }.padding(.horizontal,8) }
+            ForEach(Array(t.steps.enumerated()),id:\.offset) { i,s in HStack { Image(systemName:s.skipped ? "forward.end" : s.finished ? "checkmark.circle.fill" : "circle"); Text(Exercise.name(s.id) + " " + s.side); Spacer(); Text(s.skipped ? "已跳过" : "\(s.completed)/\(s.sets)").foregroundStyle(.secondary) }.padding(.horizontal,8).contextMenu { Button("撤销这一步",systemImage:"arrow.uturn.backward") { if s.skipped { store.state.training?.steps[i].skipped = false } else { store.state.training?.steps[i].completed = max(0,s.completed - 1) }; store.state.training?.index = i; store.persist() } } }
         } else {
             Card { VStack(alignment:.leading,spacing:18) { Image(systemName:"figure.flexibility").font(.system(size:54)).foregroundStyle(.indigo); Text("按自己的节奏").font(.title.bold()); Text("动作范围以医生确认的计划为准。每一个项目都可以直接跳过。").foregroundStyle(.secondary); Button("开始今天的训练") { store.start() }.buttonStyle(.glassProminent).accessibilityIdentifier("begin-session") } }
             ForEach(store.snapshot.choices.filter(\.enabled)) { c in Card { VStack(alignment:.leading,spacing:8) { Text(Exercise.name(c.id)).font(.headline); Text("\(c.sets) 组 × \(c.reps) 次 · 保持 \(c.hold) 秒").foregroundStyle(.secondary) } } }
@@ -121,7 +122,7 @@ struct SettingsView:View {
     @Environment(Store.self) private var store
     @State private var code = ""; @State private var prefs = Preferences(); @State private var photo:PhotosPickerItem?; @State private var saving = false
     var body:some View { Form {
-        Section("跨设备同步") { Text("网页版和其他设备使用同一同步码，才能访问同一份记录与壁纸。匿名身份不会自动跨设备合并。").font(.footnote); ShareLink(item:"XW1-" + store.identity) { Label("保存本机同步码",systemImage:"key") }; SecureField("粘贴已有 XW1- 同步码",text:$code).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("连接已有记录") { Task { await store.connect(code); code = "" } }; Button("立即同步") { Task { await store.sync() } }; Text("待上传：\(store.state.pending.count) 条").font(.caption) }
+        Section("跨设备同步") { Text("网页版和其他设备使用同一同步码，才能访问同一份记录与壁纸。匿名身份不会自动跨设备合并。").font(.footnote); ShareLink(item:"XW1-" + store.identity) { Label("保存本机同步码",systemImage:"key") }; SecureField("粘贴已有 XW1- 同步码",text:$code).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("连接已有记录") { Task { await store.connect(code); code = "" } }; Button("立即同步") { Task { await store.sync() } }; NavigationLink("待上传：\(store.state.pending.count) 条") { PendingView() } }
         Section("个性化背景") { Picker("配色",selection:$prefs.preset) { Text("冰蓝").tag("ice"); Text("银白").tag("silver"); Text("暮色").tag("dusk") }; PhotosPicker(selection:$photo,matching:.images) { Label("选择背景图片",systemImage:"photo") }; Toggle("使用背景图片",isOn:$prefs.photo); Text("背景暗度：\(prefs.dim)%"); Slider(value:Binding(get:{Double(prefs.dim)},set:{prefs.dim = Int($0)}),in:0...60); Text("内容面板透明参数：\(prefs.glass)%"); Slider(value:Binding(get:{Double(prefs.glass)},set:{prefs.glass = Int($0)}),in:25...90); Button(saving ? "保存中…" : "保存并同步外观") { Task { await saveAppearance() } }.disabled(saving) }
         Section("关于") { LabeledContent("App",value:"KneeHope 2.0"); Text("SwiftUI 原生界面 · iOS 27\n系统导航与 Liquid Glass 控件\n启用系统“减少动态效果”或“降低透明度”后会自动适配。").font(.footnote).foregroundStyle(.secondary) }
     }.navigationTitle("设置").onAppear { prefs = store.appearance.prefs }.onChange(of:photo) { _,item in Task { await loadPhoto(item) } } }
@@ -138,4 +139,13 @@ struct SettingsView:View {
             var ap = store.appearance; ap.photoId = UUID().uuidString; ap.photoData = "data:image/jpeg;base64," + jpeg.base64EncodedString(); ap.prefs.photo = true; store.state.appearance = ap; store.wallpaperImage = UIImage(data:jpeg); prefs = ap.prefs; store.persist()
         } catch { store.error = error.localizedDescription }
     }
+}
+struct PendingView:View {
+    @Environment(Store.self) private var store
+    @State private var replace = false; @State private var discard = false
+    var body:some View { List {
+        Text("遇到版本冲突时不会覆盖云端。请先查看修改内容，确认需要保留哪一份。").font(.footnote).foregroundStyle(.secondary)
+        if let first = store.state.pending.first { Section("第一条待上传修改") { Text(String(data:first.body,encoding:.utf8) ?? "").font(.caption.monospaced()).textSelection(.enabled); ShareLink(item:String(data:first.body,encoding:.utf8) ?? "") { Label("导出这条修改",systemImage:"square.and.arrow.up") }; Button("重新同步") { Task { await store.sync() } }; if first.path != "/api/records" || !(String(data:first.body,encoding:.utf8)?.contains("\"session\"") ?? false) { Button("确认保留本机修改") { replace = true } }; Button("丢弃这条待上传修改",role:.destructive) { discard = true } } }
+        else { ContentUnavailableView("没有待上传内容",systemImage:"checkmark.icloud") }
+    }.navigationTitle("同步详情").confirmationDialog("以本机修改更新云端？",isPresented:$replace,titleVisibility:.visible) { Button("确认保留本机修改") { Task { await store.retryFirstWithLatestRevision() } } } message:{Text("会先读取云端最新版本，再提交你确认的本机内容。")}.confirmationDialog("丢弃这条本机修改？",isPresented:$discard,titleVisibility:.visible) { Button("丢弃",role:.destructive) { if !store.state.pending.isEmpty { store.state.pending.removeFirst(); store.persist(); Task { await store.sync() } } } } message:{Text("此操作不可撤销。你可以先导出备份。云端已有记录不会删除。") } }
 }

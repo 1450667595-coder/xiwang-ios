@@ -7,6 +7,7 @@ import Observation
     var state = DiskState(); var busy = false; var error:String?; var online = true; var identity:String; var chatBusy = false
     var fixture:Bool; private let service:Service; private let monitor = NWPathMonitor(); private var syncing = false
     var wallpaperImage:UIImage?
+    private let diskQueue = DispatchQueue(label:"KneeHope.persistence",qos:.utility)
     private var file:URL { FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("KneeHope-\(identity).json") }
     init() {
         let testing = ProcessInfo.processInfo.arguments.contains("--ui-testing")
@@ -22,7 +23,11 @@ import Observation
     var appearance:Appearance { state.appearance ?? Appearance(prefs:Preferences(),revision:0) }
     func persist() {
         guard !fixture else { return }
-        do { try FileManager.default.createDirectory(at:file.deletingLastPathComponent(),withIntermediateDirectories:true); try JSONEncoder().encode(state).write(to:file,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication]) } catch { self.error = "本地保存失败：\(error.localizedDescription)" }
+        let saved = state; let destination = file
+        diskQueue.async { [weak self] in
+            do { try FileManager.default.createDirectory(at:destination.deletingLastPathComponent(),withIntermediateDirectories:true); try JSONEncoder().encode(saved).write(to:destination,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication]) }
+            catch { let message = "本地保存失败：\(error.localizedDescription)"; Task { @MainActor in self?.error = message } }
+        }
     }
     func sync() async {
         guard !fixture, !syncing else { return }; syncing = true; busy = true; defer { syncing = false; busy = false }
@@ -34,12 +39,26 @@ import Observation
             state.appearance = appearance; persist()
         } catch { self.error = error.localizedDescription }
     }
+    private func flushDisk() async { await withCheckedContinuation { continuation in diskQueue.async { continuation.resume() } } }
+    func reloadCloud() async -> Bool {
+        guard !fixture else { return true }; do { let d = try await service.request(path:"/api/records"); state.snapshot = try JSONDecoder().decode(Snapshot.self,from:d); let a = try await service.request(path:"/api/appearance"); state.appearance = try JSONDecoder().decode(Appearance.self,from:a); persist(); return true } catch { self.error = error.localizedDescription; return false }
+    }
+    func retryFirstWithLatestRevision() async {
+        guard let first = state.pending.first, await reloadCloud(), var json = try? JSONSerialization.jsonObject(with:first.body) as? [String:Any] else { return }
+        guard state.pending.first?.id == first.id else { return }
+        if json["type"] as? String == "session" { await sync(); return }
+        if first.path == "/api/appearance" { json["revision"] = appearance.revision }
+        else if first.path == "/api/care" { json["revision"] = snapshot.care.first(where:{$0.id == json["id"] as? String})?.revision ?? 0 }
+        else if json["type"] as? String == "plan" { json["revision"] = snapshot.planRevision }
+        else { json["revision"] = snapshot.records.first(where:{$0.date == json["date"] as? String})?.revision ?? 0 }
+        guard let body = try? JSONSerialization.data(withJSONObject:json) else { return }; state.pending[0].body = body; persist(); await flushDisk(); await sync()
+    }
     func send<T:Encodable>(_ payload:T,path:String) async -> Bool {
         do {
             let body = try JSONEncoder().encode(payload)
             if fixture { if path == "/api/care", let c = try? JSONDecoder().decode(Care.self,from:body) { state.snapshot?.care.append(c) }; return true }
             // Persist before contacting the server. Session UUIDs make retries idempotent.
-            let p = Pending(path:path,body:body); state.pending.append(p); persist(); await sync()
+            let p = Pending(path:path,body:body); state.pending.append(p); persist(); await flushDisk(); await sync()
             return !state.pending.contains(where:{$0.id == p.id})
         } catch { self.error = error.localizedDescription; return false }
     }
@@ -57,6 +76,7 @@ import Observation
     func connect(_ code:String) async {
         let value = code.trimmingCharacters(in:.whitespacesAndNewlines).replacingOccurrences(of:"XW1-",with:"")
         guard UUID(uuidString:value) != nil else { error = "请输入完整的 XW1- 同步码。"; return }
+        guard !syncing else { error = "正在同步，请稍后再连接其他设备记录。"; return }
         guard state.pending.isEmpty, state.training == nil else { error = "请先保存当前训练并同步待上传记录，再切换设备身份。"; return }
         do { try Identity.write(value); identity = value; await service.switchIdentity(value); state = DiskState(); if let d = try? Data(contentsOf:file), let s = try? JSONDecoder().decode(DiskState.self,from:d) { state = s }; await sync() } catch { self.error = error.localizedDescription }
     }
