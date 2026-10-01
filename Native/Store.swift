@@ -9,8 +9,9 @@ import Observation
     var wallpaperImage:UIImage?
     private var file:URL { FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("KneeHope-\(identity).json") }
     init() {
-        fixture = ProcessInfo.processInfo.arguments.contains("--ui-testing")
-        identity = fixture ? "fixture" : Identity.read(); service = Service(device:identity)
+        let testing = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+        let device = testing ? "fixture" : Identity.read()
+        fixture = testing; identity = device; service = Service(device:device)
         if !fixture, let data = try? Data(contentsOf:file), let saved = try? JSONDecoder().decode(DiskState.self,from:data) { state = saved; state.training?.pause() }
         if fixture { state.snapshot = Snapshot(care:[],records:[],plan:"按医生确认的范围训练",choices:Choice.defaults,planRevision:0) }
         if let encoded = state.appearance?.photoData?.split(separator:",",maxSplits:1).last, let data = Data(base64Encoded:String(encoded)) { wallpaperImage = UIImage(data:data) }
@@ -36,7 +37,7 @@ import Observation
     func send<T:Encodable>(_ payload:T,path:String) async -> Bool {
         do {
             let body = try JSONEncoder().encode(payload)
-            if fixture { return true }
+            if fixture { if path == "/api/care", let c = try? JSONDecoder().decode(Care.self,from:body) { state.snapshot?.care.append(c) }; return true }
             // Persist before contacting the server. Session UUIDs make retries idempotent.
             let p = Pending(path:path,body:body); state.pending.append(p); persist(); await sync()
             return !state.pending.contains(where:{$0.id == p.id})

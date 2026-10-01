@@ -33,6 +33,16 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: cn.xiwang.tests
+  KneeHopeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [NativeUITests]
+    dependencies:
+      - target: XiWang
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: cn.xiwang.uitests
 schemes:
   XiWang:
     build:
@@ -41,4 +51,4 @@ schemes:
     archive:
       config: Release
     test:
-      targets: [KneeHopeTests]
+      targets: [KneeHopeTests, KneeHopeUITests]

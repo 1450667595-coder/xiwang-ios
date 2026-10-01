@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import Charts
 import ImageIO
+import UIKit
 
 @main struct KneeHopeApp:App {
     @State private var store = Store()
@@ -107,8 +108,10 @@ struct RecordsView:View {
     var body:some View { List { Section("最近的训练") { Chart(store.snapshot.records.sorted{$0.date < $1.date}.suffix(14)) { e in BarMark(x:.value("日期",e.date),y:.value("分钟",Double(e.seconds)/60)).foregroundStyle(.indigo.gradient) }.frame(height:170).accessibilityLabel("最近十四次记录的训练分钟数") }; ForEach(store.snapshot.records.sorted{$0.date > $1.date}) { e in NavigationLink { RecordDetail(entry:e) } label:{ VStack(alignment:.leading,spacing:5) { Text(e.date).font(.headline); Text(e.status == "rest" ? "休息日" : "训练 \(e.seconds / 60) 分钟").foregroundStyle(.secondary); if let p = e.pain { Text("疼痛 \(p)/10").font(.caption) } } } }; if store.snapshot.records.isEmpty { ContentUnavailableView("还没有记录",systemImage:"chart.xyaxis.line",description:Text("训练与护理记录会自动汇总到这里。")) } }.scrollContentBackground(.hidden).background { Wallpaper() }.navigationTitle("记录").refreshable { await store.sync() } }
 }
 struct RecordDetail:View {
+    @Environment(Store.self) private var store; @Environment(\.dismiss) private var dismiss
     let entry:Entry
-    var body:some View { Form { LabeledContent("训练时间",value:"\(entry.seconds / 60) 分钟"); LabeledContent("疼痛",value:entry.pain.map { "\($0)/10" } ?? "未记录"); LabeledContent("肿胀",value:entry.swelling ? "有" : "无"); if !entry.notes.isEmpty { Text(entry.notes) }; Section("训练项目") { ForEach(entry.steps,id:\.key) { s in LabeledContent(Exercise.name(s.id) + " " + s.side,value:s.skipped ? "跳过 · 完成 \(s.completed) 组" : "\(s.completed)/\(s.sets) 组") } } }.navigationTitle(entry.date) }
+    @State private var pain = 0; @State private var swelling = false; @State private var notes = ""; @State private var saving = false
+    var body:some View { Form { LabeledContent("训练时间",value:"\(entry.seconds / 60) 分钟"); Stepper("疼痛 \(pain)/10",value:$pain,in:0...10); Toggle("肿胀",isOn:$swelling); TextField("备注",text:$notes,axis:.vertical); Section("训练项目") { ForEach(entry.steps,id:\.key) { s in LabeledContent(Exercise.name(s.id) + " " + s.side,value:s.skipped ? "跳过 · 完成 \(s.completed) 组" : "\(s.completed)/\(s.sets) 组") } } }.navigationTitle(entry.date).onAppear { pain = entry.pain ?? 0; swelling = entry.swelling; notes = entry.notes }.toolbar { Button("保存") { saving = true; Task { struct Payload:Encodable { var type = "record"; var date:String; var revision:Int; var status:String; var pain:Int; var swelling:Bool; var feeling:String; var notes:String }; if await store.send(Payload(date:entry.date,revision:entry.revision,status:entry.status,pain:pain,swelling:swelling,feeling:entry.feeling,notes:String(notes.prefix(1000))),path:"/api/records") { dismiss() }; saving = false } }.disabled(saving) } }
 }
 struct ChatView:View {
     @Environment(Store.self) private var store; @Environment(\.dismiss) private var dismiss; @State private var text = ""

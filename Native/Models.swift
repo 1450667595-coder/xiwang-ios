@@ -26,9 +26,17 @@ struct Care: Codable, Identifiable {
 }
 struct Snapshot: Codable { var care:[Care]; var records:[Entry]; var plan:String; var choices:[Choice]; var planRevision:Int }
 struct Appearance: Codable { var prefs:Preferences; var photoId:String?; var revision:Int; var photoData:String? }
+extension Appearance {
+    enum CodingKeys:String,CodingKey { case prefs,photoId,revision,photoData }
+    func encode(to encoder:Encoder) throws { var c = encoder.container(keyedBy:CodingKeys.self); try c.encode(prefs,forKey:.prefs); try c.encode(photoId,forKey:.photoId); try c.encode(revision,forKey:.revision); try c.encodeIfPresent(photoData,forKey:.photoData) }
+}
 struct Preferences: Codable { var preset = "ice"; var photo = false; var dim = 18; var glass = 55 }
 struct ChatMessage: Codable, Identifiable { var id = UUID(); var role:String; var content:String }
 struct SessionPayload: Codable { var type = "session"; var id:String; var date:String; var seconds:Int; var steps:[Step]; var planNote:String; var pain:Int?; var swelling:Bool; var feeling:String; var notes:String }
+extension SessionPayload {
+    enum CodingKeys:String,CodingKey { case type,id,date,seconds,steps,planNote,pain,swelling,feeling,notes }
+    func encode(to encoder:Encoder) throws { var c = encoder.container(keyedBy:CodingKeys.self); try c.encode(type,forKey:.type); try c.encode(id,forKey:.id); try c.encode(date,forKey:.date); try c.encode(seconds,forKey:.seconds); try c.encode(steps,forKey:.steps); try c.encode(planNote,forKey:.planNote); try c.encode(pain,forKey:.pain); try c.encode(swelling,forKey:.swelling); try c.encode(feeling,forKey:.feeling); try c.encode(notes,forKey:.notes) }
+}
 struct Training: Codable {
     var id = UUID().uuidString; var date = dayKey(); var elapsed:TimeInterval = 0; var started:Date?; var steps:[Step]; var index = 0; var deadline:Date?
     var seconds:Int { Int(elapsed + (started.map { max(0,Date().timeIntervalSince($0)) } ?? 0)) }
