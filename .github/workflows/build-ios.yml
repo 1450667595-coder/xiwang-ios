@@ -27,6 +27,7 @@ jobs:
       - name: Build unsigned IPA for Sideloadly
         run: bash scripts/build-ipa.sh
       - name: Compile and launch on iPhone simulator
+        timeout-minutes: 12
         run: |
           xcodebuild -project XiWang.xcodeproj -scheme XiWang -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/simulator CODE_SIGNING_ALLOWED=NO build
           DEVICE=$(xcrun simctl list devices available --json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const d=Object.values(JSON.parse(s).devices).flat().find(d=>d.name.startsWith('iPhone'));if(!d)process.exit(1);console.log(d.udid)});")
@@ -39,9 +40,10 @@ jobs:
           sleep 3
           xcrun simctl io "$DEVICE" screenshot artifacts/iPhone-simulator.png
       - name: Upload installation package and simulator screenshot
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: XiWang-Sideloadly
           path: artifacts/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14

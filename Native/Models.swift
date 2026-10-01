@@ -38,12 +38,13 @@ extension SessionPayload {
     func encode(to encoder:Encoder) throws { var c = encoder.container(keyedBy:CodingKeys.self); try c.encode(type,forKey:.type); try c.encode(id,forKey:.id); try c.encode(date,forKey:.date); try c.encode(seconds,forKey:.seconds); try c.encode(steps,forKey:.steps); try c.encode(planNote,forKey:.planNote); try c.encode(pain,forKey:.pain); try c.encode(swelling,forKey:.swelling); try c.encode(feeling,forKey:.feeling); try c.encode(notes,forKey:.notes) }
 }
 struct Training: Codable {
-    var id = UUID().uuidString; var date = dayKey(); var elapsed:TimeInterval = 0; var started:Date?; var steps:[Step]; var index = 0; var deadline:Date?
-    var seconds:Int { Int(elapsed + (started.map { max(0,Date().timeIntervalSince($0)) } ?? 0)) }
-    mutating func pause() { if let started { elapsed += max(0,Date().timeIntervalSince(started)) }; started = nil; deadline = nil }
+    var id = UUID().uuidString; var date = dayKey(); var elapsed:TimeInterval = 0; var started:Date?; var steps:[Step]; var index = 0; var deadline:Date?; var holdRemaining:TimeInterval?
+    var seconds:Int { Int(min(604800,elapsed + (started.map { max(0,Date().timeIntervalSince($0)) } ?? 0))) }
+    mutating func pause() { if let started { elapsed += max(0,Date().timeIntervalSince(started)) }; if let deadline { holdRemaining = max(0,deadline.timeIntervalSinceNow) }; started = nil; deadline = nil }
+    mutating func resume() { guard started == nil, !steps.allSatisfy(\.finished) else { return }; started = Date(); if let remaining = holdRemaining, remaining > 0 { deadline = Date().addingTimeInterval(remaining) }; holdRemaining = nil }
     mutating func advance() { if let next = steps.indices.first(where:{ !steps[$0].finished }) { index = next } else { pause() } }
-    mutating func skip() { let exercise = steps[index].id; for i in steps.indices where steps[i].id == exercise && !steps[i].finished { steps[i].skipped = true }; deadline = nil; advance() }
-    mutating func completeSet() { steps[index].completed = min(steps[index].sets,steps[index].completed + 1); deadline = nil; if steps[index].finished { advance() } }
+    mutating func skip() { let exercise = steps[index].id; for i in steps.indices where steps[i].id == exercise && !steps[i].finished { steps[i].skipped = true }; deadline = nil; holdRemaining = nil; advance() }
+    mutating func completeSet() { steps[index].completed = min(steps[index].sets,steps[index].completed + 1); deadline = nil; holdRemaining = nil; if steps[index].finished { advance() } }
 }
 func dayKey(_ date:Date = Date()) -> String { let f = DateFormatter(); f.locale = Locale(identifier:"en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.string(from:date) }
 struct Pending: Codable, Identifiable { var id = UUID(); var path:String; var body:Data }

@@ -77,7 +77,7 @@ import Observation
             return !state.pending.contains(where:{$0.id == p.id})
         } catch { self.error = error.localizedDescription; return false }
     }
-    func start() { if state.training == nil { state.training = Training(steps:Step.make(snapshot.choices)) }; state.training?.started = Date(); persist() }
+    func start() { if state.training == nil { state.training = Training(steps:Step.make(snapshot.choices)) }; state.training?.resume(); persist() }
     func pause() { state.training?.pause(); persist() }
     func completeSet() { state.training?.completeSet(); persist() }
     func skip() { state.training?.skip(); persist() }
