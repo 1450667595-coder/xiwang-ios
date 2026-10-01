@@ -24,6 +24,10 @@ struct Care: Codable, Identifiable, Equatable {
     var id:String; var date:String; var kind:String; var time:String; var minutes:Int?; var notes:String; var revision:Int; var deleted:Bool
     var label:String { ["heat":"热敷","topical":"涂药","patch":"贴膏药"][kind] ?? kind }
 }
+extension Care {
+    enum CodingKeys:String,CodingKey { case id,date,kind,time,minutes,notes,revision,deleted }
+    func encode(to encoder:Encoder) throws { var c = encoder.container(keyedBy:CodingKeys.self); try c.encode(id,forKey:.id); try c.encode(date,forKey:.date); try c.encode(kind,forKey:.kind); try c.encode(time,forKey:.time); try c.encode(minutes,forKey:.minutes); try c.encode(notes,forKey:.notes); try c.encode(revision,forKey:.revision); try c.encode(deleted,forKey:.deleted) }
+}
 struct Snapshot: Codable { var care:[Care]; var records:[Entry]; var plan:String; var choices:[Choice]; var planRevision:Int }
 struct Appearance: Codable { var prefs:Preferences; var photoId:String?; var revision:Int; var photoData:String? }
 extension Appearance {
