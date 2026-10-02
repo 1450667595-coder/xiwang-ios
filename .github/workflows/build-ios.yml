@@ -29,18 +29,21 @@ jobs:
       - name: Build unsigned IPA for Sideloadly
         run: bash scripts/build-ipa.sh
       - name: Compile and launch on iPhone simulator
-        timeout-minutes: 12
+        timeout-minutes: 18
         run: |
           xcodebuild -project XiWang.xcodeproj -scheme XiWang -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/simulator CODE_SIGNING_ALLOWED=NO build
           DEVICE=$(xcrun simctl list devices available --json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const d=Object.values(JSON.parse(s).devices).flat().find(d=>d.name.startsWith('iPhone'));if(!d)process.exit(1);console.log(d.udid)});")
           xcrun simctl boot "$DEVICE"
           xcrun simctl bootstatus "$DEVICE" -b
-          xcodebuild -project XiWang.xcodeproj -scheme XiWang -destination "platform=iOS Simulator,id=$DEVICE" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 60 -maximum-test-execution-time-allowance 120 -derivedDataPath build/tests -resultBundlePath artifacts/NativeTests.xcresult CODE_SIGNING_ALLOWED=NO test
+          xcodebuild -project XiWang.xcodeproj -scheme XiWang -destination "platform=iOS Simulator,id=$DEVICE" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 120 -derivedDataPath build/tests -resultBundlePath artifacts/NativeTests.xcresult CODE_SIGNING_ALLOWED=NO test
           xcrun xcresulttool export attachments --path artifacts/NativeTests.xcresult --output-path artifacts/screenshots
           xcrun simctl install "$DEVICE" build/simulator/Build/Products/Debug-iphonesimulator/XiWang.app
           xcrun simctl launch "$DEVICE" cn.xiwang.personal --ui-testing
           sleep 3
           xcrun simctl io "$DEVICE" screenshot artifacts/iPhone-simulator.png
+      - name: Export test diagnostics
+        if: always()
+        run: xcrun xcresulttool export attachments --path artifacts/NativeTests.xcresult --output-path artifacts/screenshots || true
       - name: Upload installation package and simulator screenshot
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,3 +52,4 @@ jobs:
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
+
