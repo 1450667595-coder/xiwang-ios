@@ -11,7 +11,8 @@ xcodebuild -project XiWang.xcodeproj -scheme XiWang -configuration Release \
 test -f build/device/Build/Products/Release-iphoneos/XiWang.app/XiWang
 mkdir -p build/package/Payload artifacts
 ditto build/device/Build/Products/Release-iphoneos/XiWang.app build/package/Payload/XiWang.app
-(cd build/package && zip -qry ../../artifacts/KneeHope-2.1.0-unsigned.ipa Payload)
-unzip -t artifacts/KneeHope-2.1.0-unsigned.ipa
-shasum -a 256 artifacts/KneeHope-2.1.0-unsigned.ipa > artifacts/SHA256SUMS.txt
+(cd build/package && zip -qry ../../artifacts/KneeHope-2.1.1-unsigned.ipa Payload)
+unzip -t artifacts/KneeHope-2.1.1-unsigned.ipa
+shasum -a 256 artifacts/KneeHope-2.1.1-unsigned.ipa > artifacts/SHA256SUMS.txt
 echo 'Unsigned IPA prepared. Sign/install it with your own Apple account in Sideloadly.'
+

@@ -14,6 +14,20 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.allowsInlineMediaPlayback = true
+        let edgeLayout = """
+        (() => {
+          const style = document.createElement('style');
+          style.textContent = `@media(max-width:700px){
+            .application{padding-top:calc(24px + var(--kneehope-safe-top,0px))!important}
+            .application:not(.training-mode){padding-bottom:calc(115px + var(--kneehope-safe-bottom,0px))!important}
+            .application.training-mode{padding-bottom:calc(25px + var(--kneehope-safe-bottom,0px))!important}
+            .navigation{bottom:calc(18px + var(--kneehope-safe-bottom,0px))!important}
+            .sheet{padding-bottom:calc(24px + var(--kneehope-safe-bottom,0px))!important}
+          }`;
+          document.head.appendChild(style);
+        })();
+        """
+        configuration.userContentController.addUserScript(WKUserScript(source: edgeLayout, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         if let url = Bundle.main.url(forResource: "downloads", withExtension: "js"), let script = try? String(contentsOf: url, encoding: .utf8) {
             configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
@@ -22,6 +36,7 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
         web.navigationDelegate = self
         web.uiDelegate = self
         web.allowsBackForwardNavigationGestures = true
+        web.scrollView.contentInsetAdjustmentBehavior = .never
         web.accessibilityIdentifier = "original-interface"
         web.isOpaque = false
         web.backgroundColor = view.backgroundColor
@@ -29,7 +44,7 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
         view.addSubview(web)
         NSLayoutConstraint.activate([
             web.leadingAnchor.constraint(equalTo: view.leadingAnchor), web.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            web.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), web.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+            web.topAnchor.constraint(equalTo: view.topAnchor), web.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         loading.translatesAutoresizingMaskIntoConstraints = false
         loading.hidesWhenStopped = true
@@ -54,7 +69,13 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
     @objc private func resume() { web?.evaluateJavaScript("window.dispatchEvent(new Event('focus'))", completionHandler: nil) }
     private func failure() { loading.stopAnimating(); retry.isHidden = false }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { loading.startAnimating() }
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading.stopAnimating(); retry.isHidden = true }
+    override func viewSafeAreaInsetsDidChange() { super.viewSafeAreaInsetsDidChange(); updateSafeArea() }
+    private func updateSafeArea() {
+        guard let web else { return }
+        let inset = view.safeAreaInsets
+        web.evaluateJavaScript("document.documentElement.style.setProperty('--kneehope-safe-top','\(inset.top)px');document.documentElement.style.setProperty('--kneehope-safe-bottom','\(inset.bottom)px');", completionHandler: nil)
+    }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading.stopAnimating(); retry.isHidden = true; updateSafeArea() }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { if (error as NSError).code != NSURLErrorCancelled { failure() } }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { if (error as NSError).code != NSURLErrorCancelled { failure() } }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { failure() }
