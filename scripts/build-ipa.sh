@@ -15,4 +15,3 @@ ditto build/device/Build/Products/Release-iphoneos/XiWang.app build/package/Payl
 unzip -t artifacts/KneeHope-2.1.1-unsigned.ipa
 shasum -a 256 artifacts/KneeHope-2.1.1-unsigned.ipa > artifacts/SHA256SUMS.txt
 echo 'Unsigned IPA prepared. Sign/install it with your own Apple account in Sideloadly.'
-
