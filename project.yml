@@ -13,16 +13,16 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: Native
-      - path: XiWang/Assets.xcassets
+      - path: XiWang
+
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cn.xiwang.personal
         INFOPLIST_FILE: XiWang/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "2.0.0"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "2.1.0"
+        CURRENT_PROJECT_VERSION: "4"
   KneeHopeTests:
     type: bundle.unit-test
     platform: iOS

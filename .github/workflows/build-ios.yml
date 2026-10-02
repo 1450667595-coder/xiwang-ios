@@ -24,6 +24,8 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-version | grep '^27\.'
       - name: Prepare Xcode project
         run: brew install xcodegen
+      - name: Test download bridge
+        run: node Tests/downloads.mjs
       - name: Build unsigned IPA for Sideloadly
         run: bash scripts/build-ipa.sh
       - name: Compile and launch on iPhone simulator

@@ -1,27 +1,15 @@
 import XCTest
 final class NavigationTests:XCTestCase {
-    var app:XCUIApplication!
-    override func setUpWithError() throws { continueAfterFailure = false; app = XCUIApplication(); app.launchArguments = ["--ui-testing"]; app.launch() }
-    func testNativeTabsAndProjectSkip() {
-        let home = XCTAttachment(screenshot:app.screenshot()); home.name = "KneeHope-Today"; home.lifetime = .keepAlways; add(home)
-        app.tabBars.buttons["训练"].tap(); app.buttons["begin-session"].tap()
-        XCTAssertTrue(app.staticTexts["直腿抬高"].firstMatch.waitForExistence(timeout:5))
-        app.buttons["skip-exercise"].tap(); app.buttons["直接跳过"].tap()
-        XCTAssertTrue(app.staticTexts["靠墙静蹲"].firstMatch.waitForExistence(timeout:5))
-        let training = XCTAttachment(screenshot:app.screenshot()); training.name = "KneeHope-Training"; training.lifetime = .keepAlways; add(training)
-        app.tabBars.buttons["设置"].tap(); XCTAssertTrue(app.staticTexts["跨设备同步"].exists)
-        let settings = XCTAttachment(screenshot:app.screenshot()); settings.name = "KneeHope-Settings"; settings.lifetime = .keepAlways; add(settings)
-    }
-    func testCareRecordAndNavigationBack() {
-        app.tabBars.buttons["护理"].tap(); app.buttons["add-care"].tap(); app.buttons["save-care"].tap()
-        XCTAssertTrue(app.staticTexts["热敷"].firstMatch.waitForExistence(timeout:5))
-        app.tabBars.buttons["记录"].tap(); XCTAssertTrue(app.staticTexts["还没有记录"].exists)
-    }
-    func testHomeScrollResponsiveness() { measure(metrics:[XCTOSSignpostMetric.scrollDecelerationMetric]) { app.scrollViews.firstMatch.swipeUp(); app.scrollViews.firstMatch.swipeDown() } }
-    func testDesktopEnglishNameAndSystemIconMask() {
-        XCUIDevice.shared.press(.home)
-        let desktop = XCUIApplication(bundleIdentifier:"com.apple.springboard")
-        XCTAssertTrue(desktop.icons["KneeHope"].waitForExistence(timeout:5))
-        let icon = XCTAttachment(screenshot:desktop.screenshot()); icon.name = "KneeHope-Desktop-Icon"; icon.lifetime = .keepAlways; add(icon)
-    }
+ var app:XCUIApplication!
+ override func setUpWithError() throws { continueAfterFailure=false;app=XCUIApplication();app.launch() }
+ func testOriginalInterfaceAndNavigation() {
+  let web=app.webViews.firstMatch;XCTAssertTrue(web.waitForExistence(timeout:10))
+  XCTAssertTrue(web.buttons["今天"].waitForExistence(timeout:60))
+  let home=XCTAttachment(screenshot:app.screenshot());home.name="KneeHope-Original-Today";home.lifetime = .keepAlways;add(home)
+  web.buttons["记录"].tap();XCTAssertTrue(web.buttons["计划"].waitForExistence(timeout:10));web.buttons["计划"].tap();XCTAssertTrue(web.buttons["今天"].exists);web.buttons["今天"].tap()
+  web.swipeUp();web.swipeDown();XCTAssertTrue(web.buttons["问问膝望"].exists)
+ }
+ func testDesktopEnglishNameAndSystemIconMask() {
+  XCUIDevice.shared.press(.home);let desktop=XCUIApplication(bundleIdentifier:"com.apple.springboard");XCTAssertTrue(desktop.icons["KneeHope"].waitForExistence(timeout:5));let icon=XCTAttachment(screenshot:desktop.screenshot());icon.name="KneeHope-Desktop-Icon";icon.lifetime = .keepAlways;add(icon)
+ }
 }
