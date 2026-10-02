@@ -7,6 +7,13 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let loading = UIActivityIndicatorView(style: .large)
     private let retry = UIButton(type: .system)
     private var downloads: [ObjectIdentifier: URL] = [:]
+    var onNavigationState: ((Int, Bool) -> Void)?
+    private var requestedTab = "今天"
+    func selectNativeTab(_ label: String) {
+        guard ["今天", "记录", "计划"].contains(label) else { return }
+        requestedTab = label
+        web?.evaluateJavaScript("window.kneehopeNativeTabRequest='\(label)';window.kneehopeSyncTabs?.();", completionHandler: nil)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -25,6 +32,27 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
             .sheet{padding-bottom:calc(24px + var(--kneehope-safe-bottom,0px))!important}
           }`;
           document.head.appendChild(style);
+          style.textContent += '.navigation{display:none!important}';
+          let last = '', scheduled = false;
+          window.kneehopeSyncTabs = () => {
+            const nav = document.querySelector('nav.navigation');
+            const labels = ['今天','记录','计划'];
+            const selected = nav?.querySelector('[aria-current="page"]')?.getAttribute('aria-label');
+            const pending = window.kneehopeNativeTabRequest;
+            if (nav && pending) {
+              if (selected !== pending) { nav.querySelector(`button[aria-label="${pending}"]`)?.click(); return; }
+              delete window.kneehopeNativeTabRequest;
+            }
+            const index = labels.indexOf(selected);
+            const visible = !!nav && !document.querySelector('[role="dialog"]');
+            const state = JSON.stringify({index:Math.max(0,index),visible});
+            if (state !== last) { last = state; window.webkit.messageHandlers.kneehopeNavigation.postMessage({index:Math.max(0,index),visible}); }
+          };
+          new MutationObserver(() => {
+            if (scheduled) return;
+            scheduled = true; requestAnimationFrame(() => { scheduled = false; window.kneehopeSyncTabs(); });
+          }).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['aria-current','data-state']});
+          window.kneehopeSyncTabs();
         })();
         """
         configuration.userContentController.addUserScript(WKUserScript(source: edgeLayout, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
@@ -32,6 +60,7 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
             configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
         configuration.userContentController.add(WeakDownloadHandler(self), name: "xiwangDownload")
+        configuration.userContentController.add(WeakDownloadHandler(self), name: "kneehopeNavigation")
         web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self
         web.uiDelegate = self
@@ -72,10 +101,10 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
     override func viewSafeAreaInsetsDidChange() { super.viewSafeAreaInsetsDidChange(); updateSafeArea() }
     private func updateSafeArea() {
         guard let web else { return }
-        let inset = view.safeAreaInsets
+        let inset = view.window?.safeAreaInsets ?? view.safeAreaInsets
         web.evaluateJavaScript("document.documentElement.style.setProperty('--kneehope-safe-top','\(inset.top)px');document.documentElement.style.setProperty('--kneehope-safe-bottom','\(inset.bottom)px');", completionHandler: nil)
     }
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading.stopAnimating(); retry.isHidden = true; updateSafeArea() }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading.stopAnimating(); retry.isHidden = true; updateSafeArea(); selectNativeTab(requestedTab) }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { if (error as NSError).code != NSURLErrorCancelled { failure() } }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { if (error as NSError).code != NSURLErrorCancelled { failure() } }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { failure() }
@@ -119,6 +148,12 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
         if presentedViewController == nil { present(alert, animated: true) }
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "kneehopeNavigation" {
+            guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == "https", message.frameInfo.securityOrigin.host == home.host,
+                  let body = message.body as? [String: Any], let index = body["index"] as? Int, (0...2).contains(index), let visible = body["visible"] as? Bool else { return }
+            onNavigationState?(index, visible)
+            return
+        }
         guard message.name == "xiwangDownload", message.frameInfo.isMainFrame,
               message.frameInfo.securityOrigin.protocol == "https", message.frameInfo.securityOrigin.host == home.host,
               let body = message.body as? [String: String] else { return }
