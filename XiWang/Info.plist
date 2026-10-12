@@ -14,4 +14,5 @@
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
 <key>NSPhotoLibraryUsageDescription</key><string>选择你希望用作膝望背景的照片。</string>
+<key>BACKEND_BASE_URL</key><string>$(BACKEND_BASE_URL)</string>
 </dict></plist>
