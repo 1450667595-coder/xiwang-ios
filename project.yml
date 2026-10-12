@@ -8,6 +8,7 @@ settings:
     TARGETED_DEVICE_FAMILY: "1"
     SUPPORTS_MACCATALYST: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    BACKEND_BASE_URL: ""
 targets:
   XiWang:
     type: application
