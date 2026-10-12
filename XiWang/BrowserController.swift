@@ -2,7 +2,7 @@ import UIKit
 import WebKit
 
 final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate {
-    private let home = NavigationPolicy.home
+    private var home: URL? { NavigationPolicy.home }
     private var web: WKWebView!
     private let loading = UIActivityIndicatorView(style: .large)
     private let retry = UIButton(type: .system)
@@ -94,7 +94,10 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     private func trusted(_ url: URL?) -> Bool { NavigationPolicy.trusted(url) }
-    @objc private func reconnect() { retry.isHidden = true; web.load(URLRequest(url: home)) }
+    @objc private func reconnect() {
+        guard let home else { failure(); return }
+        retry.isHidden = true; web.load(URLRequest(url: home))
+    }
     @objc private func resume() { web?.evaluateJavaScript("window.dispatchEvent(new Event('focus'))", completionHandler: nil) }
     private func failure() { loading.stopAnimating(); retry.isHidden = false }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { loading.startAnimating() }
@@ -149,12 +152,12 @@ final class BrowserController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "kneehopeNavigation" {
-            guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == "https", message.frameInfo.securityOrigin.host == home.host,
+            guard let home, message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == "https", message.frameInfo.securityOrigin.host == home.host,
                   let body = message.body as? [String: Any], let index = body["index"] as? Int, (0...2).contains(index), let visible = body["visible"] as? Bool else { return }
             onNavigationState?(index, visible)
             return
         }
-        guard message.name == "xiwangDownload", message.frameInfo.isMainFrame,
+        guard let home, message.name == "xiwangDownload", message.frameInfo.isMainFrame,
               message.frameInfo.securityOrigin.protocol == "https", message.frameInfo.securityOrigin.host == home.host,
               let body = message.body as? [String: String] else { return }
         if body["error"] != nil { downloadError(); return }
